@@ -32,13 +32,14 @@ private:
     void identifier();
     void number();
     void stringLiteral();
+    void charLiteral();
 
     // to add tokens that are being identified
     void addToken(TokenType type);
 
 public:
     // constructor (removed SymbolTable dependency)
-    Lexer(const string& src);
+    Lexer(string src);
 
     // tokenizer
     vector<Token> tokenize();

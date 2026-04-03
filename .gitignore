@@ -2,3 +2,4 @@ compiler.exe
 output/
 *.o
 *.out
+Frontend/node_modules/

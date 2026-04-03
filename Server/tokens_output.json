@@ -1,0 +1,11 @@
+{
+    "errors": [],
+    "tokens": [
+        {
+            "col": 1,
+            "lexeme": "",
+            "line": 1,
+            "type": "END_OF_FILE"
+        }
+    ]
+}
