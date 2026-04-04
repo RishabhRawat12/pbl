@@ -4,7 +4,7 @@
 void SemanticAnalyzer::analyze(const vector<unique_ptr<Stmt>>& program) {
     for (const auto& stmt : program) {
         if (stmt) {
-            visitStmt(stmt.get());  // 🔥 use raw pointer safely
+            visitStmt(stmt.get());
         }
     }
 
@@ -32,7 +32,7 @@ void SemanticAnalyzer::visitStmt(Stmt* stmt) {
         DataType condType = getExprType(ifs->condition.get());
 
         if (condType != TYPE_INT) {
-            reportError("Condition must be integer type", 0, 0);
+            reportError("Condition must be integer type", ifs->line, 0);
         }
 
         for (auto& s : ifs->thenBranch)
@@ -48,7 +48,7 @@ void SemanticAnalyzer::visitStmt(Stmt* stmt) {
         if (fr->condition) {
             DataType condType = getExprType(fr->condition.get());
             if (condType != TYPE_INT) {
-                reportError("For loop condition must be integer", 0, 0);
+                reportError("For loop condition must be integer", fr->line, 0);
             }
         }
 
@@ -59,21 +59,46 @@ void SemanticAnalyzer::visitStmt(Stmt* stmt) {
     }
 }
 
+// CHECK FOR VARS IN INITIALIZER
+bool SemanticAnalyzer::containsVariableExpr(Expr* expr) {
+    if (!expr) return false;
+    
+    if (dynamic_cast<VariableExpr*>(expr)) {
+        return true;
+    }
+    
+    if (auto binExpr = dynamic_cast<BinaryExpr*>(expr)) {
+        return containsVariableExpr(binExpr->left.get()) || containsVariableExpr(binExpr->right.get());
+    }
+    
+    return false;
+}
+
 // DECLARATION
 void SemanticAnalyzer::handleDeclaration(DeclarationStmt* stmt) {
     string name = stmt->name;
+
+    if (!symTable.lookup(name)) {
+        reportError("Variable '" + name + "' not found in symbol table", stmt->line, 0);
+        return;
+    }
 
     DataType declaredType = stringToType(symTable.table[name].type);
     isUsed[name] = false;
 
     if (stmt->initializer) {
+        // Enforce Scope Rules and Halt Evaluation Immediately
+        if (symTable.table[name].scope == "GLOBAL" && containsVariableExpr(stmt->initializer.get())) {
+            reportError("Global variable '" + name + "' cannot be initialized with another variable", stmt->line, 0);
+            return; // Hard stop for this node. Prevents further invalid state evaluation.
+        }
+
         DataType exprType = getExprType(stmt->initializer.get());
 
         if (exprType == TYPE_UNKNOWN) return;
 
         if (!isCompatible(declaredType, exprType)) {
-            reportError("Type mismatch in declaration of '" + name + "'",
-                        symTable.table[name].line, 0);
+            reportError("Type mismatch in declaration of '" + name + "'", stmt->line, 0);
         }
 
         isInitialized[name] = true;
@@ -87,7 +112,7 @@ void SemanticAnalyzer::handleAssignment(AssignmentStmt* stmt) {
     string name = stmt->name;
 
     if (!symTable.lookup(name)) {
-        reportError("Variable '" + name + "' not declared before assignment", 0, 0);
+        reportError("Variable '" + name + "' not declared before assignment", stmt->line, 0);
         return;
     }
 
@@ -97,8 +122,7 @@ void SemanticAnalyzer::handleAssignment(AssignmentStmt* stmt) {
     if (exprType == TYPE_UNKNOWN) return;
 
     if (!isCompatible(declaredType, exprType)) {
-        reportError("Type mismatch in assignment to '" + name + "'",
-                    symTable.table[name].line, 0);
+        reportError("Type mismatch in assignment to '" + name + "'", stmt->line, 0);
     }
 
     isInitialized[name] = true;
@@ -115,7 +139,7 @@ DataType SemanticAnalyzer::getExprType(Expr* expr) {
         string name = varExpr->name;
 
         if (!symTable.lookup(name)) {
-            reportError("Undeclared variable '" + name + "'", 0, 0);
+            reportError("Undeclared variable '" + name + "'", varExpr->line, 0);
             return TYPE_UNKNOWN;
         }
 
@@ -135,20 +159,20 @@ DataType SemanticAnalyzer::getExprType(Expr* expr) {
         if (leftType == TYPE_UNKNOWN || rightType == TYPE_UNKNOWN)
             return TYPE_UNKNOWN;
 
-        return evaluateBinary(leftType, rightType, binExpr->op);
+        return evaluateBinary(leftType, rightType, binExpr->op, binExpr->line);
     }
 
     return TYPE_UNKNOWN;
 }
 
 // BINARY RULES
-DataType SemanticAnalyzer::evaluateBinary(DataType left, DataType right, string op) {
+DataType SemanticAnalyzer::evaluateBinary(DataType left, DataType right, string op, int line) {
 
     if (op == "+" || op == "-" || op == "*" || op == "/") {
 
         if (left == TYPE_INT && right == TYPE_INT) return TYPE_INT;
 
-        reportError("Invalid arithmetic operation", 0, 0);
+        reportError("Invalid arithmetic operation", line, 0);
         return TYPE_UNKNOWN;
     }
 
@@ -157,7 +181,7 @@ DataType SemanticAnalyzer::evaluateBinary(DataType left, DataType right, string 
 
         if (left == right) return TYPE_INT;
 
-        reportError("Invalid comparison between incompatible types", 0, 0);
+        reportError("Invalid comparison between incompatible types", line, 0);
         return TYPE_UNKNOWN;
     }
 
@@ -171,11 +195,11 @@ bool SemanticAnalyzer::isCompatible(DataType a, DataType b) {
     return false;
 }
 
-// STRING → TYPE
+// TYPE MAPPING (Fix for the abstraction leak)
 DataType SemanticAnalyzer::stringToType(string typeStr) {
-    if (typeStr == "KEYWORD_INT") return TYPE_INT;
-    if (typeStr == "KEYWORD_CHAR") return TYPE_CHAR;
-    if (typeStr == "KEYWORD_STRING") return TYPE_STRING;
+    if (typeStr == "int") return TYPE_INT;
+    if (typeStr == "char") return TYPE_CHAR;
+    if (typeStr == "string") return TYPE_STRING;
     return TYPE_UNKNOWN;
 }
 

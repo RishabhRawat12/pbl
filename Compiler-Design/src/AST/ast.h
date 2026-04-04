@@ -11,6 +11,8 @@ using json = nlohmann::json;
 // Base class for expressions
 class Expr {
 public:
+    int line = 0; // Stores the line number for error reporting
+
     virtual ~Expr() = default;
 
     // Mandatory JSON contract
@@ -20,6 +22,8 @@ public:
 // Base class for statements
 class Stmt {
 public:
+    int line = 0; // Stores the line number for error reporting
+
     virtual ~Stmt() = default;
 
     // Mandatory JSON contract

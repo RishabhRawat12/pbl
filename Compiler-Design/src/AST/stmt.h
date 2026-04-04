@@ -12,14 +12,15 @@ public:
     string name;
     std::unique_ptr<Expr> initializer;
 
-    DeclarationStmt(string n, std::unique_ptr<Expr> init)
-        : name(n), initializer(move(init)) {}
+    DeclarationStmt(string n, std::unique_ptr<Expr> init, int l)
+        : name(n), initializer(move(init)) { line = l; }
 
     json toJson() const override {
         return {
             {"type", "DeclarationStmt"},
             {"name", name},
-            {"initializer", initializer ? initializer->toJson() : json()}
+            {"initializer", initializer ? initializer->toJson() : json()},
+            {"line", line}
         };
     }
 };
@@ -30,14 +31,15 @@ public:
     string name;
     std::unique_ptr<Expr> value;
 
-    AssignmentStmt(string n, std::unique_ptr<Expr> v)
-        : name(n), value(move(v)) {}
+    AssignmentStmt(string n, std::unique_ptr<Expr> v, int l)
+        : name(n), value(move(v)) { line = l; }
 
     json toJson() const override {
         return {
             {"type", "AssignmentStmt"},
             {"name", name},
-            {"value", value ? value->toJson() : json()}
+            {"value", value ? value->toJson() : json()},
+            {"line", line}
         };
     }
 };
@@ -51,10 +53,10 @@ public:
 
     IfStmt(std::unique_ptr<Expr> c,
            std::vector<std::unique_ptr<Stmt>> t,
-           std::vector<std::unique_ptr<Stmt>> e)
+           std::vector<std::unique_ptr<Stmt>> e, int l)
         : condition(move(c)),
           thenBranch(move(t)),
-          elseBranch(move(e)) {}
+          elseBranch(move(e)) { line = l; }
 
     json toJson() const override {
         json thenJson = json::array();
@@ -71,7 +73,8 @@ public:
             {"type", "IfStmt"},
             {"condition", condition ? condition->toJson() : json()},
             {"thenBranch", thenJson},
-            {"elseBranch", elseJson}
+            {"elseBranch", elseJson},
+            {"line", line}
         };
     }
 };
@@ -87,11 +90,11 @@ public:
     ForStmt(std::unique_ptr<Stmt> i,
             std::unique_ptr<Expr> c,
             std::unique_ptr<Stmt> inc,
-            std::vector<std::unique_ptr<Stmt>> b)
+            std::vector<std::unique_ptr<Stmt>> b, int l)
         : init(move(i)),
           condition(move(c)),
           increment(move(inc)),
-          body(move(b)) {}
+          body(move(b)) { line = l; }
 
     json toJson() const override {
         json bodyJson = json::array();
@@ -104,7 +107,8 @@ public:
             {"init", init ? init->toJson() : json()},
             {"condition", condition ? condition->toJson() : json()},
             {"increment", increment ? increment->toJson() : json()},
-            {"body", bodyJson}
+            {"body", bodyJson},
+            {"line", line}
         };
     }
 };

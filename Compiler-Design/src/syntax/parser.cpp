@@ -46,12 +46,20 @@ unique_ptr<Stmt> Parser::declaration() {
             Token typeToken = previous();
             Token name = consume(IDENTIFIER, "Give variable name");
 
+            // Fix the Abstraction Leak: Map token to semantic string
+            string semanticType = "unknown";
+            if (typeToken.type == KEYWORD_INT) semanticType = "int";
+            else if (typeToken.type == KEYWORD_CHAR) semanticType = "char";
+            else if (typeToken.type == KEYWORD_STRING) semanticType = "string";
+
+            symTable.insert(name.lexeme, semanticType, name.line);
+
             consume(ASSIGN, "Missing '='");
 
             auto val = expression();
             consume(SEMICOLON, "Missing ';'");
 
-            return make_unique<DeclarationStmt>(name.lexeme, move(val));
+            return make_unique<DeclarationStmt>(name.lexeme, move(val), name.line);
         }
 
         return statement();
@@ -71,6 +79,7 @@ unique_ptr<Stmt> Parser::statement() {
 
 // ---------------- IF ----------------
 unique_ptr<Stmt> Parser::ifStatement() {
+    Token ifToken = previous();
     consume(LEFT_PAREN, "Missing '(' after if");
 
     auto condition = expression();
@@ -86,11 +95,12 @@ unique_ptr<Stmt> Parser::ifStatement() {
         elseBranch = block();
     }
 
-    return make_unique<IfStmt>(move(condition), move(thenBranch), move(elseBranch));
+    return make_unique<IfStmt>(move(condition), move(thenBranch), move(elseBranch), ifToken.line);
 }
 
 // ---------------- FOR ----------------
 unique_ptr<Stmt> Parser::forStatement() {
+    Token forToken = previous();
     consume(LEFT_PAREN, "Missing '(' after for");
 
     auto init = assignment();
@@ -104,7 +114,7 @@ unique_ptr<Stmt> Parser::forStatement() {
 
     auto body = block();
 
-    return make_unique<ForStmt>(move(init), move(condition), move(increment), move(body));
+    return make_unique<ForStmt>(move(init), move(condition), move(increment), move(body), forToken.line);
 }
 
 // ---------------- BLOCK ----------------
@@ -129,7 +139,7 @@ unique_ptr<Stmt> Parser::assignment() {
     auto val = expression();
     consume(SEMICOLON, "Missing ';'");
 
-    return make_unique<AssignmentStmt>(name.lexeme, move(val));
+    return make_unique<AssignmentStmt>(name.lexeme, move(val), name.line);
 }
 
 // ---------------- EXPRESSIONS ----------------
@@ -144,9 +154,10 @@ unique_ptr<Expr> Parser::comparison() {
            match(GREATER_EQUAL) || match(LESS_EQUAL) ||
            match(EQUAL_EQUAL) || match(NOT_EQUAL)) {
 
-        string op = previous().lexeme;
+        Token opToken = previous();
+        string op = opToken.lexeme;
         auto right = term();
-        expr = make_unique<BinaryExpr>(move(expr), op, move(right));
+        expr = make_unique<BinaryExpr>(move(expr), op, move(right), opToken.line);
     }
 
     return expr;
@@ -156,9 +167,10 @@ unique_ptr<Expr> Parser::term() {
     auto expr = factor();
 
     while (match(PLUS) || match(MINUS)) {
-        string op = previous().lexeme;
+        Token opToken = previous();
+        string op = opToken.lexeme;
         auto right = factor();
-        expr = make_unique<BinaryExpr>(move(expr), op, move(right));
+        expr = make_unique<BinaryExpr>(move(expr), op, move(right), opToken.line);
     }
 
     return expr;
@@ -168,9 +180,10 @@ unique_ptr<Expr> Parser::factor() {
     auto expr = primary();
 
     while (match(MULTIPLY) || match(DIVIDE)) {
-        string op = previous().lexeme;
+        Token opToken = previous();
+        string op = opToken.lexeme;
         auto right = primary();
-        expr = make_unique<BinaryExpr>(move(expr), op, move(right));
+        expr = make_unique<BinaryExpr>(move(expr), op, move(right), opToken.line);
     }
 
     return expr;
@@ -178,20 +191,20 @@ unique_ptr<Expr> Parser::factor() {
 
 unique_ptr<Expr> Parser::primary() {
     if (match(NUMBER)) {
-        return make_unique<NumberExpr>(stoi(previous().lexeme));
+        return make_unique<NumberExpr>(stoi(previous().lexeme), previous().line);
     }
 
     if (match(STRING_LITERAL)) {
-        return make_unique<StringExpr>(previous().lexeme);
+        return make_unique<StringExpr>(previous().lexeme, previous().line);
     }
 
     if (match(CHAR_LITERAL)) {
-        return make_unique<CharExpr>(previous().lexeme);
+        return make_unique<CharExpr>(previous().lexeme, previous().line);
     }
 
     if (match(IDENTIFIER)) {
         Token var = previous();
-        return make_unique<VariableExpr>(var.lexeme);
+        return make_unique<VariableExpr>(var.lexeme, var.line);
     }
 
     error(peek(), "Invalid expression");
@@ -233,7 +246,7 @@ Token Parser::consume(TokenType type, string msg) {
     if (check(type)) return advance();
 
     error(peek(), msg);
-    throw runtime_error("Parse error");  // triggers panic mode
+    throw runtime_error("Parse error");
 }
 
 // ---------------- ERROR ----------------

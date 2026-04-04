@@ -1,4 +1,4 @@
-#ifndef SEMANTIC_ANALYZER_H
+﻿#ifndef SEMANTIC_ANALYZER_H
 #define SEMANTIC_ANALYZER_H
 
 #include <vector>
@@ -21,7 +21,6 @@ enum DataType {
     TYPE_UNKNOWN
 };
 
-// Improved error structure
 struct Error {
     string message;
     int line;
@@ -37,7 +36,6 @@ private:
     map<string, bool> isUsed;
     map<string, bool> isInitialized;
 
-    // Updated dispatch (uses raw pointer from unique_ptr.get())
     void visitStmt(Stmt* stmt);
     DataType getExprType(Expr* expr);
 
@@ -46,7 +44,9 @@ private:
 
     DataType stringToType(string);
     bool isCompatible(DataType, DataType);
-    DataType evaluateBinary(DataType, DataType, string);
+    DataType evaluateBinary(DataType, DataType, string, int);
+    
+    bool containsVariableExpr(Expr* expr);
 
     void reportError(string msg, int line, int col);
     void reportWarning(string msg);
@@ -54,7 +54,6 @@ private:
 public:
     SemanticAnalyzer(SymbolTable& st) : symTable(st) {}
 
-    // 🔥 FIXED SIGNATURE
     void analyze(const vector<unique_ptr<Stmt>>& program);
 
     vector<Error> getErrors();
