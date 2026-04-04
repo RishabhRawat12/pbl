@@ -6,7 +6,6 @@
 #include <vector>
 #include <memory>
 
-// Declaration
 class DeclarationStmt : public Stmt {
 public:
     string name;
@@ -25,7 +24,6 @@ public:
     }
 };
 
-// Assignment
 class AssignmentStmt : public Stmt {
 public:
     string name;
@@ -44,30 +42,21 @@ public:
     }
 };
 
-// IF
 class IfStmt : public Stmt {
 public:
     std::unique_ptr<Expr> condition;
     std::vector<std::unique_ptr<Stmt>> thenBranch;
     std::vector<std::unique_ptr<Stmt>> elseBranch;
 
-    IfStmt(std::unique_ptr<Expr> c,
-           std::vector<std::unique_ptr<Stmt>> t,
-           std::vector<std::unique_ptr<Stmt>> e, int l)
-        : condition(move(c)),
-          thenBranch(move(t)),
-          elseBranch(move(e)) { line = l; }
+    IfStmt(std::unique_ptr<Expr> c, std::vector<std::unique_ptr<Stmt>> t, std::vector<std::unique_ptr<Stmt>> e, int l)
+        : condition(move(c)), thenBranch(move(t)), elseBranch(move(e)) { line = l; }
 
     json toJson() const override {
         json thenJson = json::array();
-        for (const auto& stmt : thenBranch) {
-            thenJson.push_back(stmt->toJson());
-        }
+        for (const auto& stmt : thenBranch) thenJson.push_back(stmt->toJson());
 
         json elseJson = json::array();
-        for (const auto& stmt : elseBranch) {
-            elseJson.push_back(stmt->toJson());
-        }
+        for (const auto& stmt : elseBranch) elseJson.push_back(stmt->toJson());
 
         return {
             {"type", "IfStmt"},
@@ -79,7 +68,6 @@ public:
     }
 };
 
-// FOR
 class ForStmt : public Stmt {
 public:
     std::unique_ptr<Stmt> init;
@@ -87,20 +75,12 @@ public:
     std::unique_ptr<Stmt> increment;
     std::vector<std::unique_ptr<Stmt>> body;
 
-    ForStmt(std::unique_ptr<Stmt> i,
-            std::unique_ptr<Expr> c,
-            std::unique_ptr<Stmt> inc,
-            std::vector<std::unique_ptr<Stmt>> b, int l)
-        : init(move(i)),
-          condition(move(c)),
-          increment(move(inc)),
-          body(move(b)) { line = l; }
+    ForStmt(std::unique_ptr<Stmt> i, std::unique_ptr<Expr> c, std::unique_ptr<Stmt> inc, std::vector<std::unique_ptr<Stmt>> b, int l)
+        : init(move(i)), condition(move(c)), increment(move(inc)), body(move(b)) { line = l; }
 
     json toJson() const override {
         json bodyJson = json::array();
-        for (const auto& stmt : body) {
-            bodyJson.push_back(stmt->toJson());
-        }
+        for (const auto& stmt : body) bodyJson.push_back(stmt->toJson());
 
         return {
             {"type", "ForStmt"},

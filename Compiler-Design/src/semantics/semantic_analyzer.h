@@ -1,4 +1,4 @@
-﻿#ifndef SEMANTIC_ANALYZER_H
+#ifndef SEMANTIC_ANALYZER_H
 #define SEMANTIC_ANALYZER_H
 
 #include <vector>
@@ -46,16 +46,14 @@ private:
     bool isCompatible(DataType, DataType);
     DataType evaluateBinary(DataType, DataType, string, int);
     
-    bool containsVariableExpr(Expr* expr);
+    bool isConstantExpression(Expr* expr);
 
     void reportError(string msg, int line, int col);
     void reportWarning(string msg);
 
 public:
     SemanticAnalyzer(SymbolTable& st) : symTable(st) {}
-
     void analyze(const vector<unique_ptr<Stmt>>& program);
-
     vector<Error> getErrors();
     json getErrorsAsJson();
 };

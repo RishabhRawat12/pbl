@@ -1,28 +1,42 @@
 import { useState } from 'react';
 import Split from 'react-split';
-import { Play, Download, Settings, RefreshCw, Terminal } from 'lucide-react';
+import { Play, Download, Settings, RefreshCw } from 'lucide-react';
 import CodeEditor from '../components/CodeEditor';
 import CompilationPanel from '../components/CompilationPanel';
+import { compileCode, extractTokens, extractSymbolTable, extractErrors } from '../utils/compilerLogic';
 
 export default function Workspace() {
     const [code, setCode] = useState('#include <stdio.h>\n\nint main() {\n    printf("Hello, World!\\n");\n    return 0;\n}');
     const [output, setOutput] = useState('');
     const [isRunning, setIsRunning] = useState(false);
+    
+    // Centralized state for the compiler outputs
+    const [compilerData, setCompilerData] = useState({
+        tokens: [],
+        symbols: [],
+        astData: null,
+        errors: { lexical: [], syntax: [], semantic: [] }
+    });
 
     const handleRun = async () => {
         setIsRunning(true);
-        setOutput('Compiling and executing...\n');
+        setOutput('Analyzing phases and executing...\n');
 
         try {
+            // 1. Fetch from your local Python backend for AST, Tokens, and Semantic data
+            const localResult = await compileCode(code);
+            setCompilerData({
+                tokens: extractTokens(localResult),
+                symbols: extractSymbolTable(localResult),
+                astData: localResult?.syntax?.ast || null,
+                errors: extractErrors(localResult)
+            });
+
+            // 2. Fetch from Wandbox for the actual program console output
             const response = await fetch('https://wandbox.org/api/compile.json', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    compiler: 'gcc-head-c',
-                    code: code
-                })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ compiler: 'gcc-head-c', code: code })
             });
 
             const result = await response.json();
@@ -34,7 +48,7 @@ export default function Workspace() {
                 const err = result.program_error ? `\nStandard Error:\n${result.program_error}` : '';
                 setOutput(`Output:\n-----------------------\n${out}${err}\n\n[Program exited with status ${result.status}]`);
             } else {
-                setOutput(`Execution failed.\n${result.program_error || 'Please try again. API could be rate limited.'}`);
+                setOutput(`Execution failed.\n${result.program_error || 'Please try again.'}`);
             }
         } catch (error) {
             setOutput(`Error: ${error.message}`);
@@ -45,7 +59,6 @@ export default function Workspace() {
 
     return (
         <div style={{ height: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-color)' }}>
-            {/* Workspace Toolbar */}
             <div className="glass-panel" style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 padding: '0.75rem 1.5rem', margin: '0 1rem 1rem 1rem', borderRadius: '8px'
@@ -75,7 +88,6 @@ export default function Workspace() {
                 </div>
             </div>
 
-            {/* Split Layout */}
             <Split
                 sizes={[60, 40]}
                 minSize={300}
@@ -88,7 +100,6 @@ export default function Workspace() {
                 cursor="col-resize"
                 style={{ display: 'flex', flex: 1, height: '100%', padding: '0 1rem 1rem 1rem' }}
             >
-                {/* Editor Pane */}
                 <div className="glass-panel" style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                     <div style={{ padding: '0.5rem 1rem', borderBottom: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.2)', fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>
                         Code Editor
@@ -98,9 +109,8 @@ export default function Workspace() {
                     </div>
                 </div>
 
-                {/* Right Pane with Compilation Panel */}
                 <div className="glass-panel" style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                    <CompilationPanel code={code} isRunning={isRunning} executionOutput={output} />
+                    <CompilationPanel isRunning={isRunning} executionOutput={output} compilerData={compilerData} />
                 </div>
             </Split>
 

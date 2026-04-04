@@ -1,12 +1,8 @@
 // src/utils/compilerLogic.js
 
-/**
- * Sends code to your Python backend to be processed by the C++ compiler.
- * Based on main.py and main.cpp logic.
- */
-export const runLexer = async (code) => {
+export const compileCode = async (code) => {
     try {
-        const response = await fetch("http://localhost:5000/compile", {
+        const response = await fetch("http://localhost:5000/api/compile", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ code })
@@ -14,35 +10,51 @@ export const runLexer = async (code) => {
         return await response.json();
     } catch (error) {
         console.error("Backend connection failed:", error);
-        return { error: "Could not connect to compiler backend." };
+        return { success: false, error: "Could not connect to compiler backend." };
     }
 };
 
-/**
- * Formats the raw symbol table from the compiler for the UI table.
- */
-export const generateSymbolTable = (symbolData) => {
-    if (!symbolData) return [];
-    return Object.entries(symbolData).map(([name, info]) => ({
-        name,
-        type: info.type,
-        line: info.line
-    }));
+export const extractTokens = (data) => {
+    if (data && data.lexical && data.lexical.tokens) {
+        return data.lexical.tokens;
+    }
+    return [];
 };
 
-/**
- * Combines counts of Lexical, Syntax, and Semantic errors.
- */
-export const calculateErrors = (data) => {
-    const lexCount = data.tokens?.errors?.length || 0;
-    const parseCount = data.ast?.errors?.length || 0;
-    const semCount = data.semantics?.semanticErrors?.errors?.length || 0;
-    return lexCount + parseCount + semCount;
+export const extractSymbolTable = (data) => {
+    if (data && data.semantic && data.semantic.symbolTable) {
+        // Your C++ backend only provides type and line. We provide fallbacks for scope and value.
+        return Object.entries(data.semantic.symbolTable).map(([name, info]) => ({
+            name: name,
+            type: info.type || 'unknown',
+            line: info.line || 'N/A',
+            scope: 'Global', 
+            value: '-' 
+        }));
+    }
+    return [];
 };
 
-/**
- * Returns a CSS color class based on the Token Type.
- */
+export const extractErrors = (data) => {
+    const errors = { lexical: [], syntax: [], semantic: [] };
+    if (!data || !data.success) {
+        if (data && data.error) errors.syntax.push(data.error);
+        return errors;
+    }
+
+    if (data.lexical && data.lexical.errors) {
+        errors.lexical = data.lexical.errors.map(e => e.message || "Unknown Lexical Error");
+    }
+    if (data.syntax && data.syntax.errors) {
+        errors.syntax = data.syntax.errors.map(e => `Line ${e.line}: ${e.message}`);
+    }
+    if (data.semantic && data.semantic.semanticErrors && data.semantic.semanticErrors.errors) {
+        errors.semantic = data.semantic.semanticErrors.errors.map(e => e.message || "Unknown Semantic Error");
+    }
+    
+    return errors;
+};
+
 export const getTokenColor = (type) => {
     const colors = {
         KEYWORD_INT: "text-blue-400",

@@ -1,26 +1,19 @@
 #include "semantic_analyzer.h"
 
-// ENTRY
 void SemanticAnalyzer::analyze(const vector<unique_ptr<Stmt>>& program) {
     for (const auto& stmt : program) {
-        if (stmt) {
-            visitStmt(stmt.get());
-        }
+        if (stmt) visitStmt(stmt.get());
     }
 
-    // unused variable warnings
     for (auto const& pair : symTable.table) {
         string name = pair.first;
-
         if (isUsed.find(name) == isUsed.end() || !isUsed[name]) {
             reportWarning("Unused variable: '" + name + "'");
         }
     }
 }
 
-// DISPATCH
 void SemanticAnalyzer::visitStmt(Stmt* stmt) {
-
     if (auto decl = dynamic_cast<DeclarationStmt*>(stmt)) {
         handleDeclaration(decl);
     } 
@@ -28,53 +21,40 @@ void SemanticAnalyzer::visitStmt(Stmt* stmt) {
         handleAssignment(assign);
     }
     else if (auto ifs = dynamic_cast<IfStmt*>(stmt)) {
-
         DataType condType = getExprType(ifs->condition.get());
-
         if (condType != TYPE_INT) {
             reportError("Condition must be integer type", ifs->line, 0);
         }
-
-        for (auto& s : ifs->thenBranch)
-            visitStmt(s.get());
-
-        for (auto& s : ifs->elseBranch)
-            visitStmt(s.get());
+        for (auto& s : ifs->thenBranch) visitStmt(s.get());
+        for (auto& s : ifs->elseBranch) visitStmt(s.get());
     }
     else if (auto fr = dynamic_cast<ForStmt*>(stmt)) {
-
         if (fr->init) visitStmt(fr->init.get());
-
         if (fr->condition) {
             DataType condType = getExprType(fr->condition.get());
             if (condType != TYPE_INT) {
                 reportError("For loop condition must be integer", fr->line, 0);
             }
         }
-
         if (fr->increment) visitStmt(fr->increment.get());
-
-        for (auto& s : fr->body)
-            visitStmt(s.get());
+        for (auto& s : fr->body) visitStmt(s.get());
     }
 }
 
-// CHECK FOR VARS IN INITIALIZER
-bool SemanticAnalyzer::containsVariableExpr(Expr* expr) {
-    if (!expr) return false;
+bool SemanticAnalyzer::isConstantExpression(Expr* expr) {
+    if (expr == nullptr) return true;
     
     if (dynamic_cast<VariableExpr*>(expr)) {
-        return true;
+        return false;
     }
     
     if (auto binExpr = dynamic_cast<BinaryExpr*>(expr)) {
-        return containsVariableExpr(binExpr->left.get()) || containsVariableExpr(binExpr->right.get());
+        return isConstantExpression(binExpr->left.get()) && isConstantExpression(binExpr->right.get());
     }
     
-    return false;
+    return true;
 }
 
-// DECLARATION
 void SemanticAnalyzer::handleDeclaration(DeclarationStmt* stmt) {
     string name = stmt->name;
 
@@ -87,14 +67,12 @@ void SemanticAnalyzer::handleDeclaration(DeclarationStmt* stmt) {
     isUsed[name] = false;
 
     if (stmt->initializer) {
-        // Enforce Scope Rules and Halt Evaluation Immediately
-        if (symTable.table[name].scope == "GLOBAL" && containsVariableExpr(stmt->initializer.get())) {
-            reportError("Global variable '" + name + "' cannot be initialized with another variable", stmt->line, 0);
-            return; // Hard stop for this node. Prevents further invalid state evaluation.
+        if (symTable.table[name].scope == "GLOBAL" && !isConstantExpression(stmt->initializer.get())) {
+            reportError("Initializer element is not constant", stmt->line, 0);
+            return; 
         }
 
         DataType exprType = getExprType(stmt->initializer.get());
-
         if (exprType == TYPE_UNKNOWN) return;
 
         if (!isCompatible(declaredType, exprType)) {
@@ -107,7 +85,6 @@ void SemanticAnalyzer::handleDeclaration(DeclarationStmt* stmt) {
     }
 }
 
-// ASSIGNMENT
 void SemanticAnalyzer::handleAssignment(AssignmentStmt* stmt) {
     string name = stmt->name;
 
@@ -128,9 +105,7 @@ void SemanticAnalyzer::handleAssignment(AssignmentStmt* stmt) {
     isInitialized[name] = true;
 }
 
-// EXPRESSION TYPE
 DataType SemanticAnalyzer::getExprType(Expr* expr) {
-
     if (dynamic_cast<NumberExpr*>(expr)) return TYPE_INT;
     if (dynamic_cast<StringExpr*>(expr)) return TYPE_STRING;
     if (dynamic_cast<CharExpr*>(expr)) return TYPE_CHAR;
@@ -144,7 +119,6 @@ DataType SemanticAnalyzer::getExprType(Expr* expr) {
         }
 
         isUsed[name] = true;
-
         if (!isInitialized[name]) {
             reportWarning("Variable '" + name + "' used before initialization");
         }
@@ -156,31 +130,22 @@ DataType SemanticAnalyzer::getExprType(Expr* expr) {
         DataType leftType = getExprType(binExpr->left.get());
         DataType rightType = getExprType(binExpr->right.get());
 
-        if (leftType == TYPE_UNKNOWN || rightType == TYPE_UNKNOWN)
-            return TYPE_UNKNOWN;
-
+        if (leftType == TYPE_UNKNOWN || rightType == TYPE_UNKNOWN) return TYPE_UNKNOWN;
         return evaluateBinary(leftType, rightType, binExpr->op, binExpr->line);
     }
 
     return TYPE_UNKNOWN;
 }
 
-// BINARY RULES
 DataType SemanticAnalyzer::evaluateBinary(DataType left, DataType right, string op, int line) {
-
     if (op == "+" || op == "-" || op == "*" || op == "/") {
-
         if (left == TYPE_INT && right == TYPE_INT) return TYPE_INT;
-
         reportError("Invalid arithmetic operation", line, 0);
         return TYPE_UNKNOWN;
     }
 
-    if (op == ">" || op == "<" || op == ">=" || op == "<=" ||
-        op == "==" || op == "!=") {
-
+    if (op == ">" || op == "<" || op == ">=" || op == "<=" || op == "==" || op == "!=") {
         if (left == right) return TYPE_INT;
-
         reportError("Invalid comparison between incompatible types", line, 0);
         return TYPE_UNKNOWN;
     }
@@ -188,14 +153,12 @@ DataType SemanticAnalyzer::evaluateBinary(DataType left, DataType right, string 
     return TYPE_UNKNOWN;
 }
 
-// COMPATIBILITY
 bool SemanticAnalyzer::isCompatible(DataType a, DataType b) {
     if (a == b) return true;
     if (a == TYPE_INT && b == TYPE_CHAR) return true;
     return false;
 }
 
-// TYPE MAPPING (Fix for the abstraction leak)
 DataType SemanticAnalyzer::stringToType(string typeStr) {
     if (typeStr == "int") return TYPE_INT;
     if (typeStr == "char") return TYPE_CHAR;
@@ -203,43 +166,30 @@ DataType SemanticAnalyzer::stringToType(string typeStr) {
     return TYPE_UNKNOWN;
 }
 
-// ERROR
 void SemanticAnalyzer::reportError(string msg, int line, int col) {
     string key = msg + to_string(line) + to_string(col);
-
     if (reportedErrors.find(key) == reportedErrors.end()) {
         reportedErrors.insert(key);
         errors.push_back({msg, line, col});
     }
 }
 
-// WARNING
 void SemanticAnalyzer::reportWarning(string msg) {
     errors.push_back({"WARNING: " + msg, 0, 0});
 }
 
-// GET RAW
-vector<Error> SemanticAnalyzer::getErrors() {
-    return errors;
-}
+vector<Error> SemanticAnalyzer::getErrors() { return errors; }
 
-// JSON OUTPUT
 json SemanticAnalyzer::getErrorsAsJson() {
     json arr = json::array();
-
     for (auto& e : errors) {
         json obj;
         obj["line"] = e.line;
         obj["col"] = e.col;
         obj["message"] = e.message;
-
-        if (e.message.find("WARNING:") != string::npos)
-            obj["type"] = "warning";
-        else
-            obj["type"] = "error";
-
+        if (e.message.find("WARNING:") != string::npos) obj["type"] = "warning";
+        else obj["type"] = "error";
         arr.push_back(obj);
     }
-
     return arr;
 }
