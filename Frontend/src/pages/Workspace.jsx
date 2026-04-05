@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import Split from 'react-split';
-import { Play, Download, Settings, RefreshCw, Save } from 'lucide-react';
+import { Play, Save, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import CodeEditor from '../components/CodeEditor';
 import CompilationPanel from '../components/CompilationPanel';
 import FileExplorer from '../components/FileExplorer';
@@ -9,58 +10,70 @@ import FileExplorer from '../components/FileExplorer';
 export default function Workspace() {
     const navigate = useNavigate();
     
-    // State for the currently opened file
-    const [activeFile, setActiveFile] = useState({ id: null, name: 'untitled.c', content: '// Select or create a file in the explorer\n' });
+    const [openFiles, setOpenFiles] = useState([]);
+    const [activeFileId, setActiveFileId] = useState(null);
     const [output, setOutput] = useState('');
     const [isRunning, setIsRunning] = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
     const [compilerData, setCompilerData] = useState(null);
 
-    // Auth Protection Check
     useEffect(() => {
         if (!localStorage.getItem('compiler_token')) {
             navigate('/');
         }
     }, [navigate]);
 
-    // Handle selecting a file from the sidebar
+    const activeFile = openFiles.find(f => f.id === activeFileId);
+
     const handleFileSelect = (file) => {
-        setActiveFile(file);
+        const alreadyOpen = openFiles.find(f => f.id === file.id);
+        if (!alreadyOpen) {
+            setOpenFiles([...openFiles, file]);
+        }
+        setActiveFileId(file.id);
     };
 
-    // Update active file content as user types
-    const handleCodeChange = (newCode) => {
-        setActiveFile(prev => ({ ...prev, content: newCode }));
-    };
-
-    // Save the file to the database
-    const handleSave = async () => {
-        if (!activeFile.id) return; // Don't save an unsaved/temporary file
-        setIsSaving(true);
-        const token = localStorage.getItem('compiler_token');
-        
-        try {
-            await fetch(`http://localhost:5000/api/fs/file/${activeFile.id}`, {
-                method: 'PUT',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ content: activeFile.content })
-            });
-        } catch (error) {
-            console.error("Save failed", error);
-        } finally {
-            setIsSaving(false);
+    const handleCloseTab = (e, fileId) => {
+        e.stopPropagation();
+        const newFiles = openFiles.filter(f => f.id !== fileId);
+        setOpenFiles(newFiles);
+        if (activeFileId === fileId) {
+            setActiveFileId(newFiles.length > 0 ? newFiles[newFiles.length - 1].id : null);
         }
     };
 
-    const handleRun = async () => {
-        // Auto-save before running
-        await handleSave();
+    const handleCodeChange = (newCode) => {
+        setOpenFiles(openFiles.map(f => {
+            if (f.id === activeFileId) return { ...f, content: newCode };
+            return f;
+        }));
+    };
+
+    const handleSave = async () => {
+        if (!activeFile || !activeFile.id) return;
         
+        const token = localStorage.getItem('compiler_token');
+        const savePromise = fetch(`http://localhost:5000/api/fs/file/${activeFile.id}`, {
+            method: 'PUT',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ content: activeFile.content })
+        });
+
+        toast.promise(savePromise, {
+            loading: 'Saving file...',
+            success: 'File saved successfully!',
+            error: 'Failed to save file.'
+        });
+    };
+
+    const handleRun = async () => {
+        if (!activeFile) return;
+        
+        await handleSave();
         setIsRunning(true);
-        setOutput('Sending code to local compiler...\n');
+        setOutput('Compiling code...\n');
 
         try {
             const response = await fetch('http://localhost:5000/api/compile', {
@@ -73,11 +86,14 @@ export default function Workspace() {
             setCompilerData(result);
             
             if (result.success) {
-                setOutput(`Compilation Successful!\n-----------------------\nCompiler Logs:\n${result.compiler_logs || 'Processed with 0 errors.'}`);
+                toast.success('Compilation Successful');
+                setOutput(`Compilation Successful!\n\nCompiler Logs:\n${result.compiler_logs}`);
             } else {
-                setOutput(`Compilation Failed.\n-----------------------\nError: ${result.error}\n\nCompiler Logs:\n${result.compiler_logs || ''}`);
+                toast.error('Compilation Failed');
+                setOutput(`Compilation Failed.\nError: ${result.error}\n\nCompiler Logs:\n${result.compiler_logs}`);
             }
         } catch (error) {
+            toast.error('Server error');
             setOutput(`Server Connection Error: ${error.message}`);
         } finally {
             setIsRunning(false);
@@ -85,66 +101,57 @@ export default function Workspace() {
     };
 
     return (
-        <div style={{ height: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-color)' }}>
-            
-            {/* Workspace Toolbar */}
-            <div className="glass-panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1.5rem', margin: '0 1rem 1rem 1rem', borderRadius: '8px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(0,0,0,0.3)', padding: '0.5rem 1rem', borderRadius: '4px', border: '1px solid var(--glass-border)' }}>
-                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Active File:</span>
-                        <span style={{ color: 'var(--accent)', fontWeight: 600, fontSize: '0.875rem' }}>{activeFile.name}</span>
-                    </div>
+        <div className="workspace-wrapper">
+            <div className="workspace-toolbar">
+                <div style={{ color: 'var(--text-secondary)' }}>
+                    Workspace Environment
                 </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <button onClick={handleSave} className="btn-secondary" style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }} disabled={!activeFile.id || isSaving}>
-                        <Save size={16} /> {isSaving ? 'Saving...' : 'Save'}
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                    <button onClick={handleSave} className="btn-secondary" disabled={!activeFile}>
+                        <Save size={16} style={{marginRight: '5px'}} /> Save
                     </button>
-                    <button className="btn-primary" onClick={handleRun} disabled={isRunning} style={{ padding: '0.5rem 1.5rem', opacity: isRunning ? 0.7 : 1 }}>
-                        {isRunning ? <RefreshCw size={18} className="spin" /> : <Play size={18} />}
-                        {isRunning ? 'Compiling...' : 'Run Code'}
+                    <button className="btn-primary" onClick={handleRun} disabled={isRunning || !activeFile}>
+                        {isRunning ? <RefreshCw size={16} className="spin" /> : <Play size={16} />}
+                        <span style={{marginLeft: '5px'}}>{isRunning ? 'Compiling...' : 'Run Code'}</span>
                     </button>
                 </div>
             </div>
 
-            {/* 3-Pane Split Layout */}
             <Split
-                sizes={[20, 45, 35]} // Sidebar, Editor, Compiler Panel
+                sizes={[20, 45, 35]} 
                 minSize={[200, 300, 300]}
                 expandToMin={false}
                 gutterSize={10}
-                gutterAlign="center"
                 direction="horizontal"
-                style={{ display: 'flex', flex: 1, height: '100%', padding: '0 1rem 1rem 1rem' }}
+                style={{ display: 'flex', flex: 1, padding: '0 1rem 1rem 1rem', overflow: 'hidden' }}
             >
-                {/* Left Pane: File Explorer */}
-                <div className="glass-panel" style={{ height: '100%', overflow: 'hidden', borderRadius: '8px 0 0 8px' }}>
-                    <FileExplorer onSelectFile={handleFileSelect} currentFileId={activeFile.id} />
+                <div className="glass-panel" style={{ height: '100%', overflow: 'hidden' }}>
+                    <FileExplorer onSelectFile={handleFileSelect} currentFileId={activeFileId} />
                 </div>
 
-                {/* Center Pane: Editor */}
-                <div className="glass-panel" style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: '0' }}>
-                    <div style={{ padding: '0.5rem 1rem', borderBottom: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.2)', fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                        Editor
+                <div className="glass-panel" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                    <div className="editor-tabs">
+                        {openFiles.length === 0 && <div className="tab-item">No files open</div>}
+                        {openFiles.map(f => (
+                            <div key={f.id} className={`tab-item ${activeFileId === f.id ? 'active' : ''}`} onClick={() => setActiveFileId(f.id)}>
+                                {f.name}
+                                <button className="tab-close" onClick={(e) => handleCloseTab(e, f.id)}>x</button>
+                            </div>
+                        ))}
                     </div>
-                    <div style={{ flex: 1, overflow: 'hidden', padding: '0.5rem 0' }}>
-                        <CodeEditor code={activeFile.content} onChange={handleCodeChange} />
+                    <div style={{ flex: 1, overflow: 'hidden' }}>
+                        {activeFile ? (
+                            <CodeEditor code={activeFile.content} onChange={handleCodeChange} compilerData={compilerData} />
+                        ) : (
+                            <div style={{ padding: '2rem', color: '#666', textAlign: 'center' }}>Select a file from the explorer to start editing.</div>
+                        )}
                     </div>
                 </div>
 
-                {/* Right Pane: Compilation Panel */}
-                <div className="glass-panel" style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: '0 8px 8px 0' }}>
-                    <CompilationPanel code={activeFile.content} isRunning={isRunning} executionOutput={output} compilerData={compilerData} />
+                <div className="glass-panel" style={{ height: '100%', overflow: 'hidden' }}>
+                    <CompilationPanel isRunning={isRunning} executionOutput={output} compilerData={compilerData} />
                 </div>
             </Split>
-
-            <style>{`
-        .gutter { background-color: transparent; cursor: col-resize; position: relative; }
-        .gutter::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); height: 30px; width: 4px; background: var(--glass-border); border-radius: 4px; transition: background 0.2s; }
-        .gutter:hover::after { background: var(--accent); }
-        .spin { animation: spin 1s linear infinite; }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-      `}</style>
         </div>
     );
 }

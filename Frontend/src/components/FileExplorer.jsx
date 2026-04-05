@@ -1,20 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Folder, FolderOpen, FileText, Plus, ChevronRight, ChevronDown, FileCode2 } from 'lucide-react';
+import { Folder, FileText, Plus, Edit2, Trash2, FileCode2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export default function FileExplorer({ onSelectFile, currentFileId }) {
   const [folders, setFolders] = useState([]);
   const [files, setFiles] = useState([]);
-  const [loading, setLoading] = useState(true);
-  
-  // UI States
-  const [expandedFolders, setExpandedFolders] = useState(new Set());
-  const [isCreating, setIsCreating] = useState(null); // 'file' or 'folder'
+  const [isCreating, setIsCreating] = useState(null); 
   const [newItemName, setNewItemName] = useState('');
 
   const fetchTree = async () => {
     const token = localStorage.getItem('compiler_token');
-    if (!token) return;
-    
     try {
       const response = await fetch('http://localhost:5000/api/fs/tree', {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -25,22 +20,11 @@ export default function FileExplorer({ onSelectFile, currentFileId }) {
         setFiles(data.files);
       }
     } catch (err) {
-      console.error("Failed to fetch file tree", err);
-    } finally {
-      setLoading(false);
+      console.log(err);
     }
   };
 
   useEffect(() => { fetchTree(); }, []);
-
-  const toggleFolder = (folderId) => {
-    setExpandedFolders(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(folderId)) newSet.delete(folderId);
-      else newSet.add(folderId);
-      return newSet;
-    });
-  };
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -49,125 +33,104 @@ export default function FileExplorer({ onSelectFile, currentFileId }) {
     const token = localStorage.getItem('compiler_token');
     const endpoint = isCreating === 'file' ? '/api/fs/file' : '/api/fs/folder';
     
-    const payload = {
-      name: newItemName,
-      folder_id: null, // Creating at root level for this version
-      parent_id: null,
-      content: isCreating === 'file' ? '// New File\n' : undefined
-    };
-
     try {
-      const response = await fetch(`http://localhost:5000${endpoint}`, {
+      await fetch(`http://localhost:5000${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ name: newItemName, content: '// New file\n' })
       });
-
-      if (response.ok) {
-        setNewItemName('');
-        setIsCreating(null);
-        fetchTree();
-      }
+      setNewItemName('');
+      setIsCreating(null);
+      fetchTree();
+      toast.success(`${isCreating} created`);
     } catch (err) {
-      console.error("Creation failed", err);
+      toast.error('Failed to create');
     }
   };
 
-  // --- RECURSIVE TREE RENDERER ---
-  const renderTree = (parentId = null, depth = 0) => {
-    const currentFolders = folders.filter(f => f.parent_id === parentId);
-    const currentFiles = files.filter(f => f.folder_id === parentId);
+  const handleDelete = async (e, id, type) => {
+    e.stopPropagation();
+    if (!window.confirm(`Are you sure you want to delete this ${type}?`)) return;
 
-    return (
-      <div style={{ paddingLeft: depth === 0 ? '0' : '1rem' }}>
-        {/* Render Folders First */}
-        {currentFolders.map(folder => {
-          const isExpanded = expandedFolders.has(folder.id);
-          return (
-            <div key={`dir-${folder.id}`}>
-              <div 
-                onClick={() => toggleFolder(folder.id)}
-                style={itemStyle(false, depth)}
-              >
-                {isExpanded ? <ChevronDown size={14} color="var(--text-secondary)"/> : <ChevronRight size={14} color="var(--text-secondary)"/>}
-                {isExpanded ? <FolderOpen size={14} color="#f59e0b" /> : <Folder size={14} color="#f59e0b" />}
-                <span style={{ color: 'var(--text-primary)' }}>{folder.name}</span>
-              </div>
-              {/* Recursively render contents if folder is expanded */}
-              {isExpanded && renderTree(folder.id, depth + 1)}
-            </div>
-          );
-        })}
-
-        {/* Render Files */}
-        {currentFiles.map(file => {
-          const isActive = currentFileId === file.id;
-          return (
-            <div 
-              key={`file-${file.id}`} 
-              onClick={() => onSelectFile(file)}
-              style={itemStyle(isActive, depth)}
-            >
-              <FileCode2 size={14} color={isActive ? "var(--accent)" : "#60a5fa"} style={{ marginLeft: '1.2rem' }} />
-              <span style={{ color: isActive ? '#fff' : 'var(--text-secondary)' }}>{file.name}</span>
-            </div>
-          );
-        })}
-      </div>
-    );
+    const token = localStorage.getItem('compiler_token');
+    try {
+      await fetch(`http://localhost:5000/api/fs/${type}/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      toast.success(`${type} deleted`);
+      fetchTree();
+    } catch (err) {
+      toast.error('Failed to delete');
+    }
   };
 
-  if (loading) return <div style={{ padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading workspace...</div>;
+  const handleRename = async (e, id, type, oldName) => {
+    e.stopPropagation();
+    const newName = window.prompt("Enter new name:", oldName);
+    if (!newName || newName === oldName) return;
+
+    const token = localStorage.getItem('compiler_token');
+    try {
+      await fetch(`http://localhost:5000/api/fs/${type}/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ name: newName })
+      });
+      toast.success('Renamed successfully');
+      fetchTree();
+    } catch (err) {
+      toast.error('Rename failed');
+    }
+  };
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.2)' }}>
-      {/* Explorer Header */}
-      <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--glass-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-secondary)', fontWeight: 600 }}>Explorer</span>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button onClick={() => setIsCreating('file')} style={actionBtnStyle} title="New File"><FileText size={14} /></button>
-          <button onClick={() => setIsCreating('folder')} style={actionBtnStyle} title="New Folder"><Folder size={14} /></button>
+    <div className="explorer-container">
+      <div style={{ padding: '10px', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+        <span style={{color: '#888', fontSize: '12px'}}>EXPLORER</span>
+        <div style={{display: 'flex', gap: '10px'}}>
+          <FileText size={14} style={{cursor: 'pointer'}} onClick={() => setIsCreating('file')} />
+          <Folder size={14} style={{cursor: 'pointer'}} onClick={() => setIsCreating('folder')} />
         </div>
       </div>
 
-      {/* Inline Creation Form */}
       {isCreating && (
-        <form onSubmit={handleCreate} style={{ padding: '0.5rem 1rem', display: 'flex', gap: '0.5rem', background: 'rgba(102, 252, 241, 0.1)' }}>
-          {isCreating === 'folder' ? <Folder size={14} color="#f59e0b" /> : <FileCode2 size={14} color="#60a5fa" />}
+        <form onSubmit={handleCreate} style={{ padding: '5px 10px', display: 'flex' }}>
           <input 
             autoFocus
             type="text" 
-            placeholder={`New ${isCreating}...`}
+            placeholder={`Name...`}
             value={newItemName}
             onChange={(e) => setNewItemName(e.target.value)}
-            style={{ flex: 1, background: 'transparent', border: 'none', color: '#fff', outline: 'none', fontSize: '0.875rem' }}
+            style={{ width: '100%', background: '#222', border: '1px solid #444', color: 'white', padding: '4px' }}
           />
-          <button type="submit" style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer' }}><Plus size={16}/></button>
-          <button type="button" onClick={() => setIsCreating(null)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}>x</button>
         </form>
       )}
 
-      {/* Tree View Container */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '0.5rem 0' }}>
-        {renderTree(null, 0)}
-        
-        {files.length === 0 && folders.length === 0 && !isCreating && (
-          <div style={{ padding: '1.5rem', fontSize: '0.875rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
-            Workspace is empty.<br/>Click the + icons above to start.
+      <div style={{ padding: '10px', overflowY: 'auto' }}>
+        {folders.map(f => (
+          <div key={`folder-${f.id}`} className="file-item-row">
+            <div style={{display: 'flex', alignItems: 'center', gap: '5px', color: '#f59e0b'}}>
+               <Folder size={14} /> <span>{f.name}</span>
+            </div>
+            <div className="file-item-actions">
+                <Edit2 size={12} className="action-icon" onClick={(e) => handleRename(e, f.id, 'folder', f.name)} />
+                <Trash2 size={12} className="action-icon" onClick={(e) => handleDelete(e, f.id, 'folder')} />
+            </div>
           </div>
-        )}
+        ))}
+        {files.map(f => (
+          <div key={`file-${f.id}`} className="file-item-row" onClick={() => onSelectFile(f)}>
+            <div style={{display: 'flex', alignItems: 'center', gap: '5px', color: currentFileId === f.id ? '#66fcf1' : '#ccc'}}>
+               <FileCode2 size={14} /> <span>{f.name}</span>
+            </div>
+            <div className="file-item-actions">
+                <Edit2 size={12} className="action-icon" onClick={(e) => handleRename(e, f.id, 'file', f.name)} />
+                <Trash2 size={12} className="action-icon" onClick={(e) => handleDelete(e, f.id, 'file')} />
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
-
-// Styling helpers
-const actionBtnStyle = { background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', padding: '4px', borderRadius: '4px', transition: 'background 0.2s' };
-const itemStyle = (isActive, depth) => ({
-  display: 'flex', alignItems: 'center', gap: '0.4rem', 
-  padding: `0.3rem 1rem 0.3rem ${depth === 0 ? '1rem' : '0.5rem'}`,
-  cursor: 'pointer', fontSize: '0.875rem', userSelect: 'none',
-  background: isActive ? 'rgba(102, 252, 241, 0.1)' : 'transparent',
-  borderLeft: isActive ? '2px solid var(--accent)' : '2px solid transparent',
-  transition: 'background 0.1s'
-});

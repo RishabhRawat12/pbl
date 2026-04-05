@@ -17,6 +17,8 @@ vector<unique_ptr<Stmt>> Parser::parse() {
 
 void Parser::synchronize() {
     panicMode = false;
+    advance(); 
+    
     while (!isAtEnd()) {
         if (previous().type == SEMICOLON) return;
         switch (peek().type) {
@@ -41,7 +43,6 @@ unique_ptr<Stmt> Parser::declaration() {
             Token name = consume(IDENTIFIER, "Expect variable/function name");
 
             if (match(LEFT_PAREN)) {
-                // Parse Function
                 vector<pair<string, string>> params;
                 if (!check(RIGHT_PAREN)) {
                     do {
@@ -61,7 +62,6 @@ unique_ptr<Stmt> Parser::declaration() {
                 auto body = block();
                 return make_unique<FunctionStmt>(semanticType, name.lexeme, params, move(body), name.line);
             } else {
-                // Parse Variable
                 if (semanticType == "void") error(typeToken, "Variable cannot have 'void' type");
                 consume(ASSIGN, "Missing '='");
                 auto val = expression();
@@ -114,13 +114,72 @@ unique_ptr<Stmt> Parser::ifStatement() {
 unique_ptr<Stmt> Parser::forStatement() {
     Token forToken = previous();
     consume(LEFT_PAREN, "Missing '(' after for");
-    auto init = assignment();
+    
+    unique_ptr<Stmt> init = nullptr;
+
+    if (match(KEYWORD_INT) || match(KEYWORD_CHAR) || match(KEYWORD_STRING)) {
+        Token typeToken = previous();
+        string semanticType = "int";
+        if (typeToken.type == KEYWORD_CHAR) semanticType = "char";
+        else if (typeToken.type == KEYWORD_STRING) semanticType = "string";
+
+        Token name = consume(IDENTIFIER, "Expect variable name");
+        consume(ASSIGN, "Missing '='");
+        auto val = expression();
+        consume(SEMICOLON, "Missing ';'");
+        init = make_unique<DeclarationStmt>(semanticType, name.lexeme, move(val), name.line);
+    } else {
+        auto initExpr = expression();
+        consume(ASSIGN, "Missing '=' in for init");
+        Token initEquals = previous();
+        auto initVal = expression();
+        consume(SEMICOLON, "Missing ';' in for");
+        init = make_unique<AssignmentStmt>(move(initExpr), move(initVal), initEquals.line);
+    }
+
     auto condition = expression();
-    consume(SEMICOLON, "Missing ';' in for");
-    auto increment = assignment();
+    consume(SEMICOLON, "Missing ';' in for condition");
+
+    auto incExpr = expression();
+    unique_ptr<Stmt> increment = nullptr;
+
+    if (match(PLUS)) {
+        if (match(PLUS)) {
+            VariableExpr* varExpr = dynamic_cast<VariableExpr*>(incExpr.get());
+            if (varExpr) {
+                auto one = make_unique<NumberExpr>(1, varExpr->line);
+                auto add = make_unique<BinaryExpr>(make_unique<VariableExpr>(varExpr->name, varExpr->line), "+", move(one), varExpr->line);
+                increment = make_unique<AssignmentStmt>(move(incExpr), move(add), varExpr->line);
+            } else {
+                error(previous(), "Invalid operand for ++");
+            }
+        } else {
+            error(previous(), "Expected ++");
+        }
+    } else if (match(MINUS)) {
+        if (match(MINUS)) {
+            VariableExpr* varExpr = dynamic_cast<VariableExpr*>(incExpr.get());
+            if (varExpr) {
+                auto one = make_unique<NumberExpr>(1, varExpr->line);
+                auto sub = make_unique<BinaryExpr>(make_unique<VariableExpr>(varExpr->name, varExpr->line), "-", move(one), varExpr->line);
+                increment = make_unique<AssignmentStmt>(move(incExpr), move(sub), varExpr->line);
+            } else {
+                error(previous(), "Invalid operand for --");
+            }
+        } else {
+            error(previous(), "Expected --");
+        }
+    } else {
+        consume(ASSIGN, "Missing '=' in for increment");
+        Token incEquals = previous();
+        auto incVal = expression();
+        increment = make_unique<AssignmentStmt>(move(incExpr), move(incVal), incEquals.line);
+    }
+
     consume(RIGHT_PAREN, "Missing ')'");
     consume(LEFT_BRACE, "Missing '{'");
     auto body = block();
+    
     return make_unique<ForStmt>(move(init), move(condition), move(increment), move(body), forToken.line);
 }
 
@@ -136,12 +195,46 @@ vector<unique_ptr<Stmt>> Parser::block() {
 
 unique_ptr<Stmt> Parser::assignment() {
     auto expr = expression();
+
+    if (match(PLUS)) {
+        if (match(PLUS)) {
+            consume(SEMICOLON, "Missing ';' after ++");
+            VariableExpr* varExpr = dynamic_cast<VariableExpr*>(expr.get());
+            if (varExpr) {
+                auto one = make_unique<NumberExpr>(1, varExpr->line);
+                auto add = make_unique<BinaryExpr>(make_unique<VariableExpr>(varExpr->name, varExpr->line), "+", move(one), varExpr->line);
+                return make_unique<AssignmentStmt>(move(expr), move(add), varExpr->line);
+            }
+            error(previous(), "Invalid operand for ++");
+            synchronize();
+            return nullptr;
+        }
+    } else if (match(MINUS)) {
+        if (match(MINUS)) {
+            consume(SEMICOLON, "Missing ';' after --");
+            VariableExpr* varExpr = dynamic_cast<VariableExpr*>(expr.get());
+            if (varExpr) {
+                auto one = make_unique<NumberExpr>(1, varExpr->line);
+                auto sub = make_unique<BinaryExpr>(make_unique<VariableExpr>(varExpr->name, varExpr->line), "-", move(one), varExpr->line);
+                return make_unique<AssignmentStmt>(move(expr), move(sub), varExpr->line);
+            }
+            error(previous(), "Invalid operand for --");
+            synchronize();
+            return nullptr;
+        }
+    }
+
     if (match(ASSIGN)) {
         Token equals = previous();
         auto value = expression();
         consume(SEMICOLON, "Missing ';'");
         return make_unique<AssignmentStmt>(move(expr), move(value), equals.line);
     }
+
+    if (match(SEMICOLON)) {
+        return nullptr;
+    }
+
     error(peek(), "Expected assignment statement");
     synchronize();
     return nullptr;
@@ -161,10 +254,24 @@ unique_ptr<Expr> Parser::comparison() {
 
 unique_ptr<Expr> Parser::term() {
     auto expr = factor();
-    while (match(PLUS) || match(MINUS)) {
-        Token opToken = previous();
-        auto right = factor();
-        expr = make_unique<BinaryExpr>(move(expr), opToken.lexeme, move(right), opToken.line);
+    while (true) {
+        // Lookahead to make sure we don't accidentally eat the first + of a ++
+        bool isPlusPlus = check(PLUS) && (current + 1 < tokens.size() && tokens[current + 1].type == PLUS);
+        bool isMinusMinus = check(MINUS) && (current + 1 < tokens.size() && tokens[current + 1].type == MINUS);
+
+        if (check(PLUS) && !isPlusPlus) {
+            match(PLUS);
+            Token opToken = previous();
+            auto right = factor();
+            expr = make_unique<BinaryExpr>(move(expr), opToken.lexeme, move(right), opToken.line);
+        } else if (check(MINUS) && !isMinusMinus) {
+            match(MINUS);
+            Token opToken = previous();
+            auto right = factor();
+            expr = make_unique<BinaryExpr>(move(expr), opToken.lexeme, move(right), opToken.line);
+        } else {
+            break;
+        }
     }
     return expr;
 }

@@ -1,0 +1,60 @@
+{
+    "ast": [
+        {
+            "initializer": {
+                "line": 1,
+                "type": "NumberExpr",
+                "value": 2
+            },
+            "line": 1,
+            "name": "a",
+            "type": "DeclarationStmt",
+            "varType": "int"
+        },
+        {
+            "initializer": {
+                "line": 2,
+                "type": "NumberExpr",
+                "value": 0
+            },
+            "line": 2,
+            "name": "i",
+            "type": "DeclarationStmt",
+            "varType": "int"
+        },
+        {
+            "body": [
+                {
+                    "line": 5,
+                    "target": {
+                        "line": 5,
+                        "name": "i",
+                        "type": "VariableExpr"
+                    },
+                    "type": "AssignmentStmt",
+                    "value": {
+                        "left": {
+                            "line": 5,
+                            "name": "a",
+                            "type": "VariableExpr"
+                        },
+                        "line": 5,
+                        "op": "+",
+                        "right": {
+                            "line": 5,
+                            "type": "NumberExpr",
+                            "value": 2
+                        },
+                        "type": "BinaryExpr"
+                    }
+                }
+            ],
+            "line": 4,
+            "name": "main",
+            "params": [],
+            "returnType": "void",
+            "type": "FunctionStmt"
+        }
+    ],
+    "errors": []
+}

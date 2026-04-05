@@ -4,8 +4,7 @@ import { getTokenColor } from '../utils/compilerLogic';
 
 // Helper component to display dynamic JSON trees for the AST
 const TreeViewer = ({ data, depth = 0 }) => {
-  if (!data) return <div style={{ color: '#c5c6c7' }}>Empty Node</div>;
-
+  if (data === null || data === undefined) return <div style={{ color: '#c5c6c7' }}>Empty Node</div>;
   if (typeof data === 'string' || typeof data === 'number' || typeof data === 'boolean') {
     return <span style={{ color: '#66fcf1' }}>{String(data)}</span>;
   }

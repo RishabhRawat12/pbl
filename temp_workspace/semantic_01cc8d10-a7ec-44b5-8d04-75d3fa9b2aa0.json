@@ -1,0 +1,33 @@
+{
+    "semanticErrors": [
+        {
+            "col": 0,
+            "line": 0,
+            "message": "WARNING: Unused variable: 'i'",
+            "type": "warning"
+        }
+    ],
+    "symbolTable": {
+        "a": {
+            "isFunction": false,
+            "line": 1,
+            "paramTypes": [],
+            "scope": "GLOBAL",
+            "type": "int"
+        },
+        "i": {
+            "isFunction": false,
+            "line": 2,
+            "paramTypes": [],
+            "scope": "GLOBAL",
+            "type": "int"
+        },
+        "main": {
+            "isFunction": true,
+            "line": 4,
+            "paramTypes": [],
+            "scope": "GLOBAL",
+            "type": "void"
+        }
+    }
+}

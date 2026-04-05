@@ -12,29 +12,21 @@ from datetime import timedelta
 app = Flask(__name__)
 CORS(app)
 
-# --- DATABASE & JWT CONFIGURATION ---
-# REPLACE 'root:password' WITH YOUR MYSQL USERNAME AND PASSWORD
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://compiler_admin:compiler123@127.0.0.1:3306/compiler_db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['JWT_SECRET_KEY'] = 'your-super-secret-jwt-key' # Change this in production
+app.config['JWT_SECRET_KEY'] = 'your-super-secret-jwt-key' 
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=7)
 
 db = SQLAlchemy(app)
 jwt = JWTManager(app)
 
-# --- COMPILER CONFIGURATION ---
-# Get the absolute path of the directory one level above 'Server'
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) 
-
 COMPILER_EXE = os.path.join(BASE_DIR, "Compiler-Design", "my_compiler.exe")
 TEMP_DIR = os.path.join(BASE_DIR, "temp_workspace")
 
 if not os.path.exists(TEMP_DIR):
     os.makedirs(TEMP_DIR)
 
-# ==========================================
-# DATABASE MODELS
-# ==========================================
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
@@ -44,23 +36,19 @@ class User(db.Model):
 class Folder(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    parent_id = db.Column(db.Integer, db.ForeignKey('folder.id'), nullable=True) # Null = Root
+    parent_id = db.Column(db.Integer, db.ForeignKey('folder.id'), nullable=True) 
     name = db.Column(db.String(100), nullable=False)
 
 class File(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    folder_id = db.Column(db.Integer, db.ForeignKey('folder.id'), nullable=True) # Null = Root
+    folder_id = db.Column(db.Integer, db.ForeignKey('folder.id'), nullable=True) 
     name = db.Column(db.String(100), nullable=False)
-    content = db.Column(db.Text, nullable=True) # Stores the actual C code
+    content = db.Column(db.Text, nullable=True) 
 
-# Create tables if they don't exist
 with app.app_context():
     db.create_all()
 
-# ==========================================
-# AUTHENTICATION ROUTES
-# ==========================================
 @app.route('/api/auth/signup', methods=['POST'])
 def signup():
     data = request.json
@@ -87,9 +75,7 @@ def login():
         return jsonify({"token": token, "username": user.username}), 200
     return jsonify({"error": "Invalid email or password"}), 401
 
-# ==========================================
-# FILE SYSTEM ROUTES
-# ==========================================
+
 @app.route('/api/fs/tree', methods=['GET'])
 @jwt_required()
 def get_file_tree():
@@ -102,6 +88,7 @@ def get_file_tree():
     
     return jsonify({"folders": folder_data, "files": file_data}), 200
 
+
 @app.route('/api/fs/file', methods=['POST'])
 @jwt_required()
 def create_file():
@@ -111,6 +98,7 @@ def create_file():
     db.session.add(new_file)
     db.session.commit()
     return jsonify({"id": new_file.id, "message": "File created"}), 201
+
 
 @app.route('/api/fs/file/<int:file_id>', methods=['PUT'])
 @jwt_required()
@@ -126,9 +114,58 @@ def update_file(file_id):
     db.session.commit()
     return jsonify({"message": "File updated"}), 200
 
-# ==========================================
-# COMPILER ROUTE (Untouched Logic)
-# ==========================================
+
+@app.route('/api/fs/file/<int:file_id>', methods=['DELETE'])
+@jwt_required()
+def delete_file(file_id):
+    user_id = get_jwt_identity()
+    file = File.query.filter_by(id=file_id, user_id=user_id).first()
+    if not file:
+        return jsonify({"error": "File not found"}), 404
+
+    db.session.delete(file)
+    db.session.commit()
+    return jsonify({"message": "File deleted"}), 200
+
+
+@app.route('/api/fs/folder', methods=['POST'])
+@jwt_required()
+def create_folder():
+    user_id = get_jwt_identity()
+    data = request.json
+    new_folder = Folder(user_id=user_id, parent_id=data.get('parent_id'), name=data.get('name'))
+    db.session.add(new_folder)
+    db.session.commit()
+    return jsonify({"id": new_folder.id, "message": "Folder created"}), 201
+
+
+@app.route('/api/fs/folder/<int:folder_id>', methods=['PUT'])
+@jwt_required()
+def update_folder(folder_id):
+    user_id = get_jwt_identity()
+    folder = Folder.query.filter_by(id=folder_id, user_id=user_id).first()
+    if not folder:
+        return jsonify({"error": "Folder not found"}), 404
+
+    data = request.json
+    folder.name = data.get('name', folder.name)
+    db.session.commit()
+    return jsonify({"message": "Folder renamed"}), 200
+
+
+@app.route('/api/fs/folder/<int:folder_id>', methods=['DELETE'])
+@jwt_required()
+def delete_folder(folder_id):
+    user_id = get_jwt_identity()
+    folder = Folder.query.filter_by(id=folder_id, user_id=user_id).first()
+    if not folder:
+        return jsonify({"error": "Folder not found"}), 404
+
+    db.session.delete(folder)
+    db.session.commit()
+    return jsonify({"message": "Folder deleted"}), 200
+
+
 @app.route('/api/compile', methods=['POST'])
 def compile_phases():
     data = request.json
@@ -177,17 +214,11 @@ def compile_phases():
     finally:
         for temp_file in [input_file, token_out, ast_out, semantic_out]:
             if os.path.exists(temp_file):
-                os.remove(temp_file)
-
-@app.route('/api/fs/folder', methods=['POST'])
-@jwt_required()
-def create_folder():
-    user_id = get_jwt_identity()
-    data = request.json
-    new_folder = Folder(user_id=user_id, parent_id=data.get('parent_id'), name=data.get('name'))
-    db.session.add(new_folder)
-    db.session.commit()
-    return jsonify({"id": new_folder.id, "message": "Folder created"}), 201
+                try:
+                    os.remove(temp_file)
+                except PermissionError:
+                    # Windows race condition: file is still locked by the OS or compiler
+                    pass
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
