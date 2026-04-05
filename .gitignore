@@ -1,5 +1,44 @@
-compiler.exe
-output/
-*.o
-*.out
+# =========================
+# Frontend (React/Vite)
+# =========================
 Frontend/node_modules/
+Frontend/dist/
+Frontend/dist-ssr/
+Frontend/.eslintcache
+Frontend/.env
+Frontend/.env.*
+
+# =========================
+# Backend (Python/Flask)
+# =========================
+Server/__pycache__/
+Server/*.py[cod]
+Server/*$py.class
+Server/venv/
+Server/env/
+Server/.env
+Server/instance/
+
+# =========================
+# C++ Compiler Artifacts
+# =========================
+Compiler-Design/*.exe
+Compiler-Design/*.o
+Compiler-Design/*.obj
+Compiler-Design/*.out
+Compiler-Design/build/
+
+# =========================
+# Runtime & Temporary Files
+# =========================
+temp_workspace/
+*.log
+npm-debug.log*
+
+# =========================
+# OS & Editor Configurations
+# =========================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
