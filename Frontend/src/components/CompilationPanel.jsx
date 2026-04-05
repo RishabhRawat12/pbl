@@ -5,7 +5,7 @@ import { getTokenColor } from '../utils/compilerLogic';
 // Helper component to display dynamic JSON trees for the AST
 const TreeViewer = ({ data, depth = 0 }) => {
   if (!data) return <div style={{ color: '#c5c6c7' }}>Empty Node</div>;
-  
+
   if (typeof data === 'string' || typeof data === 'number' || typeof data === 'boolean') {
     return <span style={{ color: '#66fcf1' }}>{String(data)}</span>;
   }
@@ -15,7 +15,7 @@ const TreeViewer = ({ data, depth = 0 }) => {
       <div style={{ paddingLeft: depth > 0 ? '1.5rem' : '0' }}>
         {data.map((item, index) => (
           <div key={index} style={{ borderLeft: '1px dashed rgba(102, 252, 241, 0.2)', paddingLeft: '0.5rem', marginBottom: '0.25rem' }}>
-             <TreeViewer data={item} depth={depth + 1} />
+            <TreeViewer data={item} depth={depth + 1} />
           </div>
         ))}
       </div>
@@ -38,8 +38,38 @@ const TreeViewer = ({ data, depth = 0 }) => {
 };
 
 export default function CompilationPanel({ isRunning, executionOutput, compilerData }) {
-  const [activeTab, setActiveTab] = useState('source'); 
-  const { tokens, symbols, astData, errors } = compilerData;
+  const [activeTab, setActiveTab] = useState('source');
+
+  // --- SAFE DATA MAPPING ---
+  const safeData = compilerData || {};
+
+  // Extract tokens safely
+  const tokens = safeData.tokens || safeData.lexical?.tokens || [];
+
+  // Extract AST safely
+  const astData = safeData.astData || safeData.syntax?.ast || null;
+
+  // Extract Symbol Table
+  let symbols = [];
+  if (Array.isArray(safeData.symbols)) {
+    symbols = safeData.symbols;
+  } else if (safeData.semantic?.symbolTable) {
+    symbols = Object.entries(safeData.semantic.symbolTable).map(([name, info]) => ({
+      name,
+      type: info.type,
+      scope: info.scope || 'GLOBAL',
+      line: info.line,
+      isFunction: info.isFunction || false,
+      params: info.paramTypes ? info.paramTypes.join(', ') : ''
+    }));
+  }
+
+  // Extract Errors safely
+  const errors = safeData.errors || {
+    lexical: safeData.lexical?.errors?.map(e => e.message) || [],
+    syntax: safeData.syntax?.errors?.map(e => e.message) || [],
+    semantic: safeData.semantic?.semanticErrors?.map(e => e.message) || []
+  };
 
   useEffect(() => {
     if (isRunning) setActiveTab('source');
@@ -47,18 +77,18 @@ export default function CompilationPanel({ isRunning, executionOutput, compilerD
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#050505', borderRadius: '0 0 8px 8px' }}>
-      
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 1rem', borderBottom: '1px solid var(--glass-border)', background: 'rgba(31,40,51,0.8)' }}>
-        
+
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button onClick={() => setActiveTab('source')} style={tabStyle(activeTab === 'source')}><Terminal size={14} /> Output</button>
           <button onClick={() => setActiveTab('tokens')} style={tabStyle(activeTab === 'tokens')}><Layers size={14} /> Tokens</button>
           <button onClick={() => setActiveTab('tree')} style={tabStyle(activeTab === 'tree')}><Network size={14} /> AST</button>
-          <button onClick={() => setActiveTab('semantic')} style={tabStyle(activeTab === 'semantic')}><Table size={14} /> Semantic</button>
+          <button onClick={() => setActiveTab('semantic')} style={tabStyle(activeTab === 'semantic')}><Table size={14} /> Symbol Table</button>
         </div>
 
-        <select 
-          className="input-field" 
+        <select
+          className="input-field"
           style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', cursor: 'pointer', appearance: 'auto', border: '1px solid rgba(102, 252, 241, 0.4)', background: 'rgba(0,0,0,0.5)', borderRadius: '4px', color: '#fff' }}
           value={activeTab === 'source' ? '' : activeTab}
           onChange={(e) => setActiveTab(e.target.value)}
@@ -71,7 +101,7 @@ export default function CompilationPanel({ isRunning, executionOutput, compilerD
       </div>
 
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        
+
         {isRunning && activeTab !== 'source' ? (
           <div style={{ padding: '2rem', color: 'var(--text-secondary)' }}>Analyzing compiler phases...</div>
         ) : (
@@ -134,48 +164,52 @@ export default function CompilationPanel({ isRunning, executionOutput, compilerD
                   )}
                 </div>
                 <div style={{ flex: 1, overflow: 'auto', padding: '1.5rem', fontFamily: 'var(--font-mono)', fontSize: '0.875rem', lineHeight: '1.8' }}>
-                  {astData ? <TreeViewer data={astData} /> : <div style={{color: 'var(--text-secondary)'}}>No AST available. Check for syntax errors.</div>}
+                  {astData ? <TreeViewer data={astData} /> : <div style={{ color: 'var(--text-secondary)' }}>No AST available. Check for syntax errors.</div>}
                 </div>
               </div>
             )}
 
             {activeTab === 'semantic' && (
-               <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                 <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.2)' }}>
-                   <h3 style={{ margin: 0, color: '#fff', fontSize: '1rem' }}>Semantic Analysis (Symbol Table)</h3>
-                   {errors.semantic.length > 0 ? (
-                     <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.5rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                       <AlertTriangle size={14} /> {errors.semantic[0]}
-                     </div>
-                   ) : (
-                     <div style={{ color: '#10b981', fontSize: '0.875rem', marginTop: '0.5rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                       <CheckCircle2 size={14} /> Symbol table verified.
-                     </div>
-                   )}
-                 </div>
-                 <div style={{ flex: 1, overflow: 'auto', padding: '1.5rem' }}>
-                   <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
-                     <thead>
-                       <tr style={{ borderBottom: '1px solid var(--glass-border)' }}>
-                         <th style={{ padding: '0.5rem', color: 'var(--text-secondary)' }}>Identifier</th>
-                         <th style={{ padding: '0.5rem', color: 'var(--text-secondary)' }}>Data Type</th>
-                         <th style={{ padding: '0.5rem', color: 'var(--text-secondary)' }}>Scope</th>
-                         <th style={{ padding: '0.5rem', color: 'var(--text-secondary)' }}>Line</th>
-                       </tr>
-                     </thead>
-                     <tbody>
-                       {symbols.map((sym, idx) => (
-                         <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                           <td style={{ padding: '0.5rem', color: '#10b981', fontWeight: 600 }}>{sym.name}</td>
-                           <td style={{ padding: '0.5rem', color: '#66fcf1' }}>{sym.type}</td>
-                           <td style={{ padding: '0.5rem', color: 'var(--text-primary)' }}>{sym.scope}</td>
-                           <td style={{ padding: '0.5rem', color: '#ef4444' }}>{sym.line}</td>
-                         </tr>
-                       ))}
-                     </tbody>
-                   </table>
-                 </div>
-               </div>
+              <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.2)' }}>
+                  <h3 style={{ margin: 0, color: '#fff', fontSize: '1rem' }}>Semantic Analysis (Symbol Table)</h3>
+                  {errors.semantic.length > 0 ? (
+                    <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.5rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <AlertTriangle size={14} /> {errors.semantic[0]}
+                    </div>
+                  ) : (
+                    <div style={{ color: '#10b981', fontSize: '0.875rem', marginTop: '0.5rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <CheckCircle2 size={14} /> Symbol table verified.
+                    </div>
+                  )}
+                </div>
+                <div style={{ flex: 1, overflow: 'auto', padding: '1.5rem' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                        <th style={{ padding: '0.5rem', color: 'var(--text-secondary)' }}>Identifier</th>
+                        <th style={{ padding: '0.5rem', color: 'var(--text-secondary)' }}>Data Type</th>
+                        <th style={{ padding: '0.5rem', color: 'var(--text-secondary)' }}>Scope</th>
+                        <th style={{ padding: '0.5rem', color: 'var(--text-secondary)' }}>Details</th>
+                        <th style={{ padding: '0.5rem', color: 'var(--text-secondary)' }}>Line</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {symbols.map((sym, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                          <td style={{ padding: '0.5rem', color: '#10b981', fontWeight: 600 }}>{sym.name}</td>
+                          <td style={{ padding: '0.5rem', color: '#66fcf1' }}>{sym.type}</td>
+                          <td style={{ padding: '0.5rem', color: 'var(--text-primary)' }}>{sym.scope}</td>
+                          <td style={{ padding: '0.5rem', color: 'var(--text-primary)' }}>
+                            {sym.isFunction ? <span style={{ color: '#f59e0b' }}>Function({sym.params})</span> : 'Variable'}
+                          </td>
+                          <td style={{ padding: '0.5rem', color: '#ef4444' }}>{sym.line}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             )}
           </>
         )}

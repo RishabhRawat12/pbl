@@ -3,61 +3,43 @@
 
 #include <vector>
 #include <memory>
-#include <string>
 #include "../lexical/token.h"
-#include "../AST/ast.h"
 #include "../AST/stmt.h"
 #include "../AST/expr.h"
 #include "../../symbol_table.h"
 
 using namespace std;
 
-// Parse error structure
 struct ParseError {
-    int line;
-    int col;
+    int line, col;
     string message;
-
-    ParseError(int l, int c, const string& msg) {
-        line = l;
-        col = c;
-        message = msg;
-    }
+    ParseError(int l, int c, string m) : line(l), col(c), message(m) {}
 };
 
 class Parser {
-private:
     vector<Token> tokens;
-    SymbolTable& symTable;
     int current;
-
-    // 🔥 ADD THESE (missing in your version)
+    SymbolTable& symTable;
     vector<ParseError> errors;
-    bool panicMode;
+    bool panicMode = false;
 
-    // helpers
-    Token advance();
     bool isAtEnd();
     Token peek();
     Token previous();
+    Token advance();
     bool check(TokenType type);
     bool match(TokenType type);
     Token consume(TokenType type, string msg);
     void error(Token token, string msg);
-
-    // 🔥 ADD THIS (missing)
     void synchronize();
 
-    // grammar
     unique_ptr<Stmt> declaration();
     unique_ptr<Stmt> statement();
-    unique_ptr<Stmt> assignment();
-
     unique_ptr<Stmt> ifStatement();
     unique_ptr<Stmt> forStatement();
+    unique_ptr<Stmt> assignment();
     vector<unique_ptr<Stmt>> block();
 
-    // expressions
     unique_ptr<Expr> expression();
     unique_ptr<Expr> comparison();
     unique_ptr<Expr> term();
@@ -66,9 +48,7 @@ private:
 
 public:
     Parser(vector<Token> tokens, SymbolTable& st);
-
     vector<unique_ptr<Stmt>> parse();
-
     vector<ParseError> getErrors();
 };
 

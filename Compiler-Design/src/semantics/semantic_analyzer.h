@@ -14,17 +14,11 @@
 using namespace std;
 using json = nlohmann::json;
 
-enum DataType {
-    TYPE_INT,
-    TYPE_CHAR,
-    TYPE_STRING,
-    TYPE_UNKNOWN
-};
+enum DataType { TYPE_INT, TYPE_CHAR, TYPE_STRING, TYPE_VOID, TYPE_UNKNOWN };
 
 struct Error {
     string message;
-    int line;
-    int col;
+    int line, col;
 };
 
 class SemanticAnalyzer {
@@ -36,17 +30,22 @@ private:
     map<string, bool> isUsed;
     map<string, bool> isInitialized;
 
+    string currentFunctionType = "";
+    bool hasReturn = false;
+    int loopDepth = 0;
+
     void visitStmt(Stmt* stmt);
     DataType getExprType(Expr* expr);
 
     void handleDeclaration(DeclarationStmt* stmt);
     void handleAssignment(AssignmentStmt* stmt);
+    void handleFunction(FunctionStmt* stmt);
 
     DataType stringToType(string);
     bool isCompatible(DataType, DataType);
     DataType evaluateBinary(DataType, DataType, string, int);
-    
     bool isConstantExpression(Expr* expr);
+    bool isLValue(Expr* expr);
 
     void reportError(string msg, int line, int col);
     void reportWarning(string msg);

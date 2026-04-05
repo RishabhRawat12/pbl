@@ -1,57 +1,65 @@
 #ifndef SYMBOL_TABLE_H
 #define SYMBOL_TABLE_H
 
-#include <iostream>
-#include <fstream>
-#include <map>
 #include <string>
-#include <iomanip>
-#include "src/lexical/token.h"
+#include <vector>
+#include <map>
 
 using namespace std;
 
-struct Symbol
-{
-    string type; // int char string
+struct SymbolInfo {
+    string type;
     int line;
-    string scope; // global
+    string scope;
+    bool isFunction = false;
+    vector<string> paramTypes;
 };
 
-class SymbolTable
-{
+class SymbolTable {
 public:
-    map<string, Symbol> table;
+    vector<map<string, SymbolInfo>> scopes;
+    map<string, SymbolInfo> table; 
 
-    void insert(string name, string type, int line)
-    {
-        cout << "DEBUG: Inserting " << name << " into table!" << endl;
-        table[name] = {type, line, "GLOBAL"};
+    SymbolTable() {
+        scopes.push_back(map<string, SymbolInfo>());
     }
 
-    bool lookup(string  name){
-        return table.find(name) != table.end();
+    void enterScope() {
+        scopes.push_back(map<string, SymbolInfo>());
     }
-    // Isse hum file ya console dono pe print kar sakte hain
-    void display(ostream &out)
-    {
-        out << "\n"
-            << string(50, '=') << endl;
-        out << left << setw(15) << "NAME"
-            << setw(15) << "TYPE"
-            << setw(10) << "LINE"
-            << setw(10) << "SCOPE" << endl;
-        out << string(50, '-') << endl;
 
-        for (auto const &pair : table)
-        {
-            string name =pair.first;
-            Symbol sym=pair.second;
-            out << left << setw(15) << name
-                << setw(15) << sym.type
-                << setw(10) << sym.line
-                << setw(10) << sym.scope << endl;
+    void exitScope() {
+        if (scopes.size() > 1) scopes.pop_back();
+    }
+
+    bool lookupCurrentScope(string name) {
+        return scopes.back().find(name) != scopes.back().end();
+    }
+
+    bool lookup(string name) {
+        for (int i = scopes.size() - 1; i >= 0; i--) {
+            if (scopes[i].find(name) != scopes[i].end()) return true;
         }
-        out << string(50, '=') << endl;
+        return false;
+    }
+
+    SymbolInfo get(string name) {
+        for (int i = scopes.size() - 1; i >= 0; i--) {
+            if (scopes[i].find(name) != scopes[i].end()) return scopes[i][name];
+        }
+        return {"unknown", 0, "UNKNOWN", false, {}};
+    }
+
+    void insertWithHistory(string name, string type, int line) {
+        string scopeName = (scopes.size() == 1) ? "GLOBAL" : "LOCAL";
+        scopes.back()[name] = {type, line, scopeName, false, {}};
+        table[name] = {type, line, scopeName, false, {}};
+    }
+
+    void insertFunctionWithHistory(string name, string type, int line, vector<string> pTypes) {
+        string scopeName = (scopes.size() == 1) ? "GLOBAL" : "LOCAL";
+        scopes.back()[name] = {type, line, scopeName, true, pTypes};
+        table[name] = {type, line, scopeName, true, pTypes};
     }
 };
 
