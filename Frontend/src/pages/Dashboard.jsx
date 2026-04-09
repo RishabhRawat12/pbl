@@ -5,7 +5,7 @@ export default function Dashboard() {
   return (
     <div style={{ paddingBottom: '4rem' }}>
 
-      {/* Hero Section */}
+
       <section style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center',
         textAlign: 'center', padding: '6rem 2rem 4rem', gap: '2rem'
@@ -38,7 +38,7 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* Language Details Section */}
+      
       <section id="features" style={{ padding: '4rem 2rem', maxWidth: '1200px', margin: '0 auto' }}>
         <h2 style={{ textAlign: 'center', fontSize: '2.5rem', marginBottom: '3rem' }}>Why Choose <span className="text-gradient">C Programming?</span></h2>
 

@@ -1,64 +1,70 @@
-import Editor, { useMonaco } from '@monaco-editor/react';
-import { useEffect } from 'react';
+import Editor from '@monaco-editor/react';
+import { useRef, useEffect } from 'react';
+import { calculateDiagnostics } from '../utils/compilerLogic';
 
-export default function CodeEditor({ code, onChange, compilerData }) {
-  const monaco = useMonaco();
+export default function CodeEditor({ code, onChange, options = {}, theme = 'vs-dark' }) {
+  const editorRef = useRef(null);
+  const monacoRef = useRef(null);
 
-  useEffect(() => {
-    if (monaco) {
-      const model = monaco.editor.getModels()[0];
-      if (!model) return;
-
-      let markers = [];
-      
-      // parse errors from the backend response if they exist
-      if (compilerData && compilerData.errors) {
-         // Gather all error messages
-         const allErrors = [
-            ...(compilerData.errors.lexical || []),
-            ...(compilerData.errors.syntax || []),
-            ...(compilerData.errors.semantic || [])
-         ];
-
-         allErrors.forEach(errString => {
-            // Student hack: try to find 'line X' in the error string to position the marker
-            const lineMatch = errString.match(/line (\d+)/i);
-            const lineNum = lineMatch ? parseInt(lineMatch[1], 10) : 1;
-
-            markers.push({
-               message: errString,
-               severity: monaco.MarkerSeverity.Error,
-               startLineNumber: lineNum,
-               startColumn: 1,
-               endLineNumber: lineNum,
-               endColumn: 100
-            });
-         });
-      }
-
-      monaco.editor.setModelMarkers(model, 'compiler', markers);
-    }
-  }, [monaco, compilerData, code]);
-
-  const handleEditorChange = (value) => {
-    if (onChange) {
-      onChange(value);
+  const applyMarkers = (value) => {
+    if (!editorRef.current || !monacoRef.current) return;
+    try {
+      const diagnostics = calculateDiagnostics(value || '');
+      const monaco = monacoRef.current;
+      const model = editorRef.current.getModel();
+      const markers = diagnostics.map(d => ({
+        startLineNumber: d.startLineNumber,
+        startColumn: d.startColumn,
+        endLineNumber: d.endLineNumber,
+        endColumn: d.endColumn,
+        message: d.message,
+        severity: d.severity === 'warning' ? monaco.MarkerSeverity.Warning : (d.severity === 'info' ? monaco.MarkerSeverity.Info : monaco.MarkerSeverity.Error)
+      }));
+      monaco.editor.setModelMarkers(model, 'customLinter', markers);
+    } catch (e) {
+      // ignore marker errors
     }
   };
+
+  const handleEditorChange = (value) => {
+    if (onChange) onChange(value);
+    applyMarkers(value);
+  };
+
+  const defaultOptions = {
+    minimap: { enabled: false },
+    fontSize: 16,
+    fontFamily: 'var(--font-mono)',
+    wordWrap: 'on',
+    lineNumbersMinChars: 3,
+    padding: { top: 16 },
+    scrollBeyondLastLine: false,
+    smoothScrolling: true,
+    cursorBlinking: 'smooth',
+    cursorSmoothCaretAnimation: 'on',
+    formatOnPaste: true,
+  };
+
+  const mergedOptions = { ...defaultOptions, ...options };
 
   return (
     <Editor
       height="100%"
       language="c"
-      theme="vs-dark"
+      theme={theme}
       value={code}
       onChange={handleEditorChange}
-      options={{
-        minimap: { enabled: false },
-        fontSize: 15,
-        fontFamily: 'var(--font-mono)',
-        wordWrap: 'on'
+      onMount={(editor, monaco) => {
+        editorRef.current = editor;
+        monacoRef.current = monaco;
+        applyMarkers(code);
       }}
+      options={mergedOptions}
+      loading={
+        <div style={{ color: 'var(--text-secondary)', display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+          Loading Editor...
+        </div>
+      }
     />
   );
 }

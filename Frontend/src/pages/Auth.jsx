@@ -1,104 +1,128 @@
 import { useState } from 'react';
-import { Terminal } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { Mail, Lock, User, ArrowRight } from 'lucide-react';
+import { authAPI } from '../utils/api';
 
-export default function Auth() {
-  const [isLogin, setIsLogin] = useState(true);
-  const [formData, setFormData] = useState({ username: '', email: '', password: '' });
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+export default function Auth({ type = 'login' }) {
+  const isLogin = type === 'login';
   const navigate = useNavigate();
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleInputChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
     setLoading(true);
+    setError('');
 
-    const endpoint = isLogin ? '/api/auth/login' : '/api/auth/signup';
-    
     try {
-      const response = await fetch(`http://localhost:5000${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        // Save the JWT token to local storage for future API requests
-        localStorage.setItem('compiler_token', data.token);
-        localStorage.setItem('compiler_user', data.username);
-        
-        // Redirect to workspace
-        navigate('/workspace');
-      } else {
-        setError(data.error || 'Authentication failed');
-      }
+      const response = await (isLogin ? authAPI.login : authAPI.register)(formData);
+      localStorage.setItem('token', response.data.token);
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+      window.dispatchEvent(new Event('authChanged'));
+      navigate('/compiler');
     } catch (err) {
-      setError('Cannot connect to the server. Is main.py running?');
+      setError(err.response?.data?.message || 'An error occurred');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
-      <div className="glass-panel" style={{ width: '100%', maxWidth: '400px', padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
-          <Terminal size={32} color="var(--accent)" />
-          <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 600 }}>C-Compiler</h2>
-        </div>
-
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: 'calc(100vh - 100px)',
+      padding: '2rem'
+    }}>
+      <div className="glass-card" style={{
+        width: '100%',
+        maxWidth: '440px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '2rem'
+      }}>
         <div style={{ textAlign: 'center' }}>
-          <h3 style={{ margin: '0 0 0.5rem 0' }}>{isLogin ? 'Welcome Back' : 'Create Account'}</h3>
-          <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-            {isLogin ? 'Enter your details to access your workspace.' : 'Sign up to start building your own compiler.'}
+          <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>
+            {isLogin ? 'Welcome Back' : 'Create an Account'}
+          </h1>
+          <p style={{ color: 'var(--text-secondary)' }}>
+            {isLogin 
+              ? 'Enter your credentials to access your workspace.' 
+              : 'Join C-Compiler to save and share your C projects.'}
           </p>
         </div>
 
-        {error && (
-          <div style={{ padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', borderRadius: '4px', color: '#ef4444', fontSize: '0.875rem', textAlign: 'center' }}>
-            {error}
-          </div>
-        )}
-
-        <form style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }} onSubmit={handleSubmit}>
+        <form style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }} onSubmit={handleSubmit}>
           {!isLogin && (
-            <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Username</label>
-              <input type="text" name="username" className="input-field" placeholder="john_doe" value={formData.username} onChange={handleInputChange} required={!isLogin} />
+            <div style={{ position: 'relative' }}>
+              <User size={20} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+              <input 
+                type="text" 
+                name="name"
+                placeholder="Full Name" 
+                className="input-field" 
+                style={{ paddingLeft: '3rem' }}
+                value={formData.name}
+                onChange={handleChange}
+                required 
+              />
             </div>
           )}
-          
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Email</label>
-            <input type="email" name="email" className="input-field" placeholder="john@example.com" value={formData.email} onChange={handleInputChange} required />
-          </div>
-          
-          <div>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Password</label>
-            <input type="password" name="password" className="input-field" placeholder="••••••••" value={formData.password} onChange={handleInputChange} required />
+
+          <div style={{ position: 'relative' }}>
+            <Mail size={20} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+            <input 
+              type="email" 
+              name="email"
+              placeholder="Email Address" 
+              className="input-field" 
+              style={{ paddingLeft: '3rem' }}
+              value={formData.email}
+              onChange={handleChange}
+              required 
+            />
           </div>
 
-          <button type="submit" className="btn-primary" style={{ marginTop: '0.5rem', justifyContent: 'center' }} disabled={loading}>
-            {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Sign Up')}
+          <div style={{ position: 'relative' }}>
+            <Lock size={20} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+            <input 
+              type="password" 
+              name="password"
+              placeholder="Password" 
+              className="input-field" 
+              style={{ paddingLeft: '3rem' }}
+              value={formData.password}
+              onChange={handleChange}
+              required 
+            />
+          </div>
+
+          {error && <p style={{ color: 'red', fontSize: '0.875rem' }}>{error}</p>}
+
+          <button type="submit" className={`btn-primary ${!isLogin ? 'no-glow' : ''}`} style={{ width: '100%', justifyContent: 'center', marginTop: '0.5rem' }} disabled={loading}>
+            {loading ? 'Loading...' : (isLogin ? 'Sign In' : 'Sign Up')} <ArrowRight size={18} />
           </button>
         </form>
 
-        <div style={{ textAlign: 'center', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-          {isLogin ? "Don't have an account? " : "Already have an account? "}
-          <button 
-            onClick={() => { setIsLogin(!isLogin); setError(''); }} 
-            style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: 0, fontWeight: 500 }}
-          >
-            {isLogin ? 'Sign Up' : 'Log In'}
-          </button>
+        <div style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+          {isLogin ? (
+            <p>Don't have an account? <Link to="/signup" style={{ color: 'var(--accent)', fontWeight: 500 }}>Sign up</Link></p>
+          ) : (
+            <p>Already have an account? <Link to="/login" style={{ color: 'var(--accent)', fontWeight: 500 }}>Sign in</Link></p>
+          )}
         </div>
       </div>
     </div>
