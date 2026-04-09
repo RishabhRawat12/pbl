@@ -11,12 +11,13 @@
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
+    "axios": "^1.14.0",
     "lucide-react": "^0.577.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "react-hot-toast": "^2.6.0",
     "react-router-dom": "^7.13.1",
     "react-split": "^2.0.14"
+    ,"vis-network": "^9.1.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
